@@ -1,6 +1,6 @@
 module github.com/spreadshirt/terraform-provider-radosgw
 
-go 1.19
+go 1.22
 
 require (
 	github.com/ceph/go-ceph v0.27.0
