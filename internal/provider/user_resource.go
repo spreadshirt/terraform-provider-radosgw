@@ -9,7 +9,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -188,5 +187,28 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 // Delete deletes the resource and removes the Terraform state on success.
 func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Info(ctx, "user update called???")
+	var state userResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	// Prepare the user deletion request
+	user := admin.User{
+		ID: state.UserID.ValueString(),
+	}
+
+	// Call RemoveUser to delete the user
+	err := r.client.RemoveUser(ctx, user)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error deleting user",
+			"Could not delete user "+state.UserID.ValueString()+": "+err.Error(),
+		)
+		return
+	}
+
+	// Remove the resource from Terraform state
+	resp.State.RemoveResource(ctx)
 }
