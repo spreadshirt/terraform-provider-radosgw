@@ -16,7 +16,7 @@ description: |-
 terraform {
   required_providers {
     radosgw = {
-      source = "spreadshirt/radosgw"
+      source = "digi-talo/radosgw"
     }
   }
 }
