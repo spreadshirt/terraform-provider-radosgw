@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     radosgw = {
-      source = "spreadshirt/radosgw"
+      source = "digi-talo/radosgw"
     }
   }
 }
@@ -14,6 +14,7 @@ provider "radosgw" {
 resource "radosgw_user" "demo_user" {
   user_id      = "demo"
   display_name = "Ceph demo user"
+  max_buckets  = 5
 }
 
 resource "radosgw_subuser" "demo_subuser_readonly" {

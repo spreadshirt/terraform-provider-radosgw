@@ -22,4 +22,4 @@ description: |-
 
 ### Optional
 
-- `max_buckets` (Int)
+- `max_buckets` (Number)

@@ -1,4 +1,4 @@
-module github.com/spreadshirt/terraform-provider-radosgw
+module github.com/digi-talo/terraform-provider-radosgw
 
 go 1.22
 

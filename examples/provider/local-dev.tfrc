@@ -1,6 +1,6 @@
 provider_installation {
   dev_overrides {
-      "registry.terraform.io/spreadshirt/radosgw" = "../.."
+      "registry.terraform.io/digi-talo/radosgw" = "../.."
   }
 
   # For all other providers, install them directly from their origin provider
