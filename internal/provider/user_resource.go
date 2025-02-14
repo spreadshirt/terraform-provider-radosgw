@@ -63,6 +63,9 @@ func (r *userResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 			"display_name": schema.StringAttribute{
 				Required: true,
 			},
+			"max_buckets": schema.Int64Attribute{
+				Optional: true,
+			},
 		},
 	}
 }
@@ -70,6 +73,7 @@ func (r *userResource) Schema(_ context.Context, _ resource.SchemaRequest, resp 
 type userResourceModel struct {
 	UserID      types.String `tfsdk:"user_id"`
 	DisplayName types.String `tfsdk:"display_name"`
+	MaxBuckets  types.Int64  `tfsdk:"max_buckets"`
 }
 
 // Create creates the resource and sets the initial Terraform state.
@@ -86,6 +90,11 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 		DisplayName: plan.DisplayName.ValueString(),
 	}
 
+	if !plan.MaxBuckets.IsNull() {
+		maxBuckets := int(plan.MaxBuckets.ValueInt64())
+		user.MaxBuckets = &maxBuckets
+	}
+
 	user, err := r.client.CreateUser(ctx, user)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -97,6 +106,9 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	plan.UserID = types.StringValue(user.ID)
 	plan.DisplayName = types.StringValue(user.DisplayName)
+	if user.MaxBuckets != nil && *user.MaxBuckets != 1000 {
+		plan.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
@@ -127,6 +139,11 @@ func (r *userResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	state.UserID = types.StringValue(user.ID)
 	state.DisplayName = types.StringValue(user.DisplayName)
+	if user.MaxBuckets != nil && *user.MaxBuckets != 1000 {
+		state.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
+	} else {
+		state.MaxBuckets = types.Int64Null()
+	}
 
 	diags = resp.State.Set(ctx, &state)
 	resp.Diagnostics.Append(diags...)
@@ -140,7 +157,6 @@ func (r *userResource) ImportState(ctx context.Context, req resource.ImportState
 	resource.ImportStatePassthroughID(ctx, path.Root("user_id"), req, resp)
 }
 
-// Update updates the resource and sets the updated Terraform state on success.
 func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
@@ -161,15 +177,15 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	user.ID = plan.UserID.ValueString()
 	user.DisplayName = plan.DisplayName.ValueString()
 
-	user = admin.User{
-		ID:          plan.UserID.ValueString(),
-		DisplayName: plan.DisplayName.ValueString(),
+	if !plan.MaxBuckets.IsNull() {
+		maxBuckets := int(plan.MaxBuckets.ValueInt64())
+		user.MaxBuckets = &maxBuckets
 	}
 
 	user, err = r.client.ModifyUser(ctx, user)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Error update user",
+			"Error updating user",
 			"Could not update user, unexpected error: "+err.Error(),
 		)
 		return
@@ -177,6 +193,9 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	plan.UserID = types.StringValue(user.ID)
 	plan.DisplayName = types.StringValue(user.DisplayName)
+	if user.MaxBuckets != nil {
+		plan.MaxBuckets = types.Int64Value(int64(*user.MaxBuckets))
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

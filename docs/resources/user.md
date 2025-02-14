@@ -19,3 +19,7 @@ description: |-
 
 - `display_name` (String)
 - `user_id` (String)
+
+### Optional
+
+- `max_buckets` (Int)
