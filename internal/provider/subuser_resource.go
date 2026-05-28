@@ -223,9 +223,11 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 
 	generateKey := false // do not auto-generate keys, they are managed using the radosgw_key resource
 	newSubuser := admin.SubuserSpec{
-		Name:        plan.Subuser.ValueString(),
-		Access:      admin.SubuserAccess(plan.Access.ValueString()),
-		GenerateKey: &generateKey,
+		Name:              plan.Subuser.ValueString(),
+		Access:            admin.SubuserAccess(plan.Access.ValueString()),
+		KeyType:           new("s3"),
+		GenerateKey:       &generateKey,
+		GenerateAccessKey: &generateKey,
 	}
 
 	err := r.client.CreateSubuser(ctx, admin.User{ID: plan.UserID.ValueString()}, newSubuser)

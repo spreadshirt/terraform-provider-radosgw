@@ -85,6 +85,7 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 	user := admin.User{
 		ID:          plan.UserID.ValueString(),
 		DisplayName: plan.DisplayName.ValueString(),
+		GenerateKey: new(false),
 	}
 
 	user, err := r.client.CreateUser(ctx, user)
