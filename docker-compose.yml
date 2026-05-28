@@ -1,4 +1,3 @@
-version: "3"
 services:
   ceph:
     image: quay.io/ceph/demo:latest-pacific
