@@ -28,9 +28,6 @@ func NewKeyResource() resource.Resource {
 type keyResource struct {
 	client   *admin.API
 	clientMu *sync.Mutex
-
-	seenKeysMu *sync.Mutex
-	seenKeys   map[string]bool
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -52,8 +49,6 @@ func (r *keyResource) Configure(ctx context.Context, req resource.ConfigureReque
 
 	r.client = providerData.client
 	r.clientMu = providerData.clientMu
-	r.seenKeys = providerData.seenKeys
-	r.seenKeysMu = providerData.seenKeysMu
 }
 
 // Metadata returns the resource type name.
@@ -113,11 +108,10 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
-	r.seenKeysMu.Lock()
+	seen := make(map[string]bool, len(user.Keys))
 	for _, key := range user.Keys {
-		r.seenKeys[key.AccessKey] = true
+		seen[key.AccessKey] = true
 	}
-	r.seenKeysMu.Unlock()
 
 	newKey := admin.UserKeySpec{
 		User:      plan.User.ValueString(),
@@ -147,11 +141,10 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		expectedUser = plan.User.ValueString() + ":" + plan.Subuser.ValueString()
 	}
 
-	r.seenKeysMu.Lock()
 	found := false
 	nonMatchingKeys := []string{}
 	for _, key := range *keys {
-		if r.seenKeys[key.AccessKey] {
+		if seen[key.AccessKey] {
 			continue
 		}
 
@@ -169,14 +162,13 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		}
 
 		found = true
-		r.seenKeys[key.AccessKey] = true
+		seen[key.AccessKey] = true
 
 		plan.AccessKey = types.StringValue(key.AccessKey)
 		plan.SecretKey = types.StringValue(key.SecretKey)
 
 		break
 	}
-	r.seenKeysMu.Unlock()
 
 	if !found {
 		if len(nonMatchingKeys) == 0 {
