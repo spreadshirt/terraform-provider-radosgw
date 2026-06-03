@@ -142,9 +142,18 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	// pick newly created key
+	expectedUser := plan.User.ValueString()
+	if !plan.Subuser.IsNull() {
+		expectedUser = plan.User.ValueString() + ":" + plan.Subuser.ValueString()
+	}
+
 	r.seenKeysMu.Lock()
 	for _, key := range *keys {
 		if r.seenKeys[key.AccessKey] {
+			continue
+		}
+
+		if key.User != expectedUser {
 			continue
 		}
 
