@@ -32,7 +32,8 @@ type radosgwProvider struct {
 }
 
 type radosgwProviderData struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 
 	seenKeys   map[string]bool
 	seenKeysMu *sync.Mutex
@@ -147,7 +148,8 @@ func (p *radosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 	}
 
 	providerData := &radosgwProviderData{
-		client: client,
+		client:   client,
+		clientMu: new(sync.Mutex),
 
 		seenKeys:   map[string]bool{},
 		seenKeysMu: new(sync.Mutex),

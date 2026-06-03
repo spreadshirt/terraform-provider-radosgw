@@ -26,7 +26,8 @@ func NewKeyResource() resource.Resource {
 
 // keyResource is the resource implementation.
 type keyResource struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 
 	seenKeysMu *sync.Mutex
 	seenKeys   map[string]bool
@@ -43,13 +44,14 @@ func (r *keyResource) Configure(ctx context.Context, req resource.ConfigureReque
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *admin.API, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *radosgwProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
 	r.client = providerData.client
+	r.clientMu = providerData.clientMu
 	r.seenKeys = providerData.seenKeys
 	r.seenKeysMu = providerData.seenKeysMu
 }
@@ -92,6 +94,9 @@ type keyResourceModel struct {
 
 // Create creates the resource and sets the initial Terraform state.
 func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan keyResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -295,6 +300,9 @@ func (r *keyResource) Update(ctx context.Context, req resource.UpdateRequest, re
 
 // Delete deletes the resource and removes the Terraform state on success.
 func (r *keyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var state keyResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
