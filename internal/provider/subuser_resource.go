@@ -37,7 +37,7 @@ func (r *subuserResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*admin.API)
+	providerData, ok := req.ProviderData.(*radosgwProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
@@ -47,7 +47,7 @@ func (r *subuserResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	r.client = client
+	r.client = providerData.client
 }
 
 // Metadata returns the resource type name.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -26,6 +27,9 @@ func NewKeyResource() resource.Resource {
 // keyResource is the resource implementation.
 type keyResource struct {
 	client *admin.API
+
+	seenKeysMu *sync.Mutex
+	seenKeys   map[string]bool
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -35,7 +39,7 @@ func (r *keyResource) Configure(ctx context.Context, req resource.ConfigureReque
 		return
 	}
 
-	client, ok := req.ProviderData.(*admin.API)
+	providerData, ok := req.ProviderData.(*radosgwProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
@@ -45,7 +49,9 @@ func (r *keyResource) Configure(ctx context.Context, req resource.ConfigureReque
 		return
 	}
 
-	r.client = client
+	r.client = providerData.client
+	r.seenKeys = providerData.seenKeys
+	r.seenKeysMu = providerData.seenKeysMu
 }
 
 // Metadata returns the resource type name.
@@ -93,6 +99,7 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// get currently known keys
 	user, err := r.client.GetUser(ctx, admin.User{ID: plan.User.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -101,23 +108,17 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		)
 		return
 	}
-	seen := make(map[string]bool, len(user.Keys))
+	r.seenKeysMu.Lock()
 	for _, key := range user.Keys {
-		seen[key.AccessKey] = true
+		r.seenKeys[key.AccessKey] = true
 	}
+	r.seenKeysMu.Unlock()
 
 	newKey := admin.UserKeySpec{
-		User:      plan.User.ValueString(),
-		SubUser:   plan.Subuser.ValueString(),
-		AccessKey: plan.AccessKey.ValueString(),
-		SecretKey: plan.SecretKey.ValueString(),
-
-		UID:     plan.User.ValueString(),
-		KeyType: "s3",
-	}
-	if newKey.AccessKey == "" || newKey.SecretKey == "" {
-		generateKey := true
-		newKey.GenerateKey = &generateKey
+		UID:         plan.User.ValueString(),
+		SubUser:     plan.Subuser.ValueString(),
+		KeyType:     "s3",
+		GenerateKey: new(true),
 	}
 
 	keys, err := r.client.CreateKey(ctx, newKey)
@@ -129,8 +130,10 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// pick newly created key
+	r.seenKeysMu.Lock()
 	for _, key := range *keys {
-		if seen[key.AccessKey] {
+		if r.seenKeys[key.AccessKey] {
 			continue
 		}
 
@@ -145,8 +148,11 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		plan.AccessKey = types.StringValue(key.AccessKey)
 		plan.SecretKey = types.StringValue(key.SecretKey)
 
+		r.seenKeys[key.AccessKey] = true
+
 		break
 	}
+	r.seenKeysMu.Unlock()
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)

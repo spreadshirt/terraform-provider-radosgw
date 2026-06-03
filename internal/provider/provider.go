@@ -7,6 +7,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -28,6 +29,13 @@ type radosgwProvider struct {
 	// provider is built and ran locally, and "test" when running acceptance
 	// testing.
 	version string
+}
+
+type radosgwProviderData struct {
+	client *admin.API
+
+	seenKeys   map[string]bool
+	seenKeysMu *sync.Mutex
 }
 
 // radosgwProviderModel describes the provider data model.
@@ -138,8 +146,15 @@ func (p *radosgwProvider) Configure(ctx context.Context, req provider.ConfigureR
 		return
 	}
 
-	resp.DataSourceData = client
-	resp.ResourceData = client
+	providerData := &radosgwProviderData{
+		client: client,
+
+		seenKeys:   map[string]bool{},
+		seenKeysMu: new(sync.Mutex),
+	}
+
+	resp.DataSourceData = providerData
+	resp.ResourceData = providerData
 
 	tflog.Info(ctx, "configured radosgw admin client", map[string]any{"success": true})
 }
