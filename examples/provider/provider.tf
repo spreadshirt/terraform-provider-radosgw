@@ -23,28 +23,20 @@ resource "radosgw_user" "dev_test_user" {
 }
 
 resource "radosgw_subuser" "dev_test_subuser_readonly" {
-  user_id = "dev_test${var.user_suffix}"
+  user_id = radosgw_user.dev_test_user.user_id
   subuser = "readonly"
   access  = "read"
-
-  depends_on = [radosgw_user.dev_test_user]
 }
 
 resource "radosgw_key" "dev_test_default_key" {
-  user = "dev_test${var.user_suffix}"
-
-  depends_on = [radosgw_user.dev_test_user]
+  user = radosgw_user.dev_test_user.user_id
 }
 
 resource "radosgw_key" "dev_test_second_key" {
-  user = "dev_test${var.user_suffix}"
-
-  depends_on = [radosgw_user.dev_test_user]
+  user = radosgw_user.dev_test_user.user_id
 }
 
 resource "radosgw_key" "dev_test_readonly_key" {
-  user    = "dev_test${var.user_suffix}"
-  subuser = "readonly"
-
-  depends_on = [radosgw_subuser.dev_test_subuser_readonly]
+  user    = radosgw_user.dev_test_user.user_id
+  subuser = radosgw_subuser.dev_test_subuser_readonly.subuser
 }
