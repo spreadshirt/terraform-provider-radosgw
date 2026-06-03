@@ -79,6 +79,21 @@ jobs:
           terraform_version: ${{ matrix.terraform }}
           terraform_wrapper: false
       - run: go mod download
+      - name: Start Ceph
+        run: docker compose up -d
+      - name: Wait for RadosGW
+        run: |
+          echo "Waiting for RadosGW to be ready..."
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:9000 > /dev/null 2>&1; then
+              echo "RadosGW is ready"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "RadosGW did not become ready in time"
+          docker compose logs ceph
+          exit 1
       - env:
           TF_ACC: "1"
         run: go test -v -cover ./internal/provider/
