@@ -148,12 +148,15 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 	}
 
 	r.seenKeysMu.Lock()
+	found := false
+	nonMatchingKeys := []string{}
 	for _, key := range *keys {
 		if r.seenKeys[key.AccessKey] {
 			continue
 		}
 
 		if key.User != expectedUser {
+			nonMatchingKeys = append(nonMatchingKeys, fmt.Sprintf("%q (user = %q)", key.AccessKey, key.User))
 			continue
 		}
 
@@ -165,14 +168,27 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 			plan.User = types.StringValue(key.User)
 		}
 
+		found = true
+		r.seenKeys[key.AccessKey] = true
+
 		plan.AccessKey = types.StringValue(key.AccessKey)
 		plan.SecretKey = types.StringValue(key.SecretKey)
-
-		r.seenKeys[key.AccessKey] = true
 
 		break
 	}
 	r.seenKeysMu.Unlock()
+
+	if !found {
+		if len(nonMatchingKeys) == 0 {
+			resp.Diagnostics.AddError("Error finding created key", "All keys known before create, radosgw api may have silently failed")
+		} else {
+			resp.Diagnostics.AddError(
+				"Error finding created key",
+				"A key was created, but no matching key was found, non-matching candidates:\n\n - "+strings.Join(nonMatchingKeys, "\n - "),
+			)
+		}
+		return
+	}
 
 	diags = resp.State.Set(ctx, plan)
 	resp.Diagnostics.Append(diags...)
