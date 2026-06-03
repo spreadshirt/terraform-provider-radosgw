@@ -11,3 +11,11 @@ import (
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"radosgw": providerserver.NewProtocol6WithError(New("test")()),
 }
+
+var testAccProviderSetup = `provider "radosgw" {
+	endpoint          = "http://127.0.0.1:9000"
+	access_key_id     = "RMkni81ukvCYTLCjk62d"
+	secret_access_key = "k8xeC8Kb62PMSXglkeuS6kLLjOHRp6y5LMntsUAR"
+}
+
+`
