@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -26,7 +27,8 @@ func NewUserResource() resource.Resource {
 
 // userResource is the resource implementation.
 type userResource struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -47,6 +49,7 @@ func (r *userResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	}
 
 	r.client = providerData.client
+	r.clientMu = providerData.clientMu
 }
 
 // Metadata returns the resource type name.
@@ -75,6 +78,9 @@ type userResourceModel struct {
 
 // Create creates the resource and sets the initial Terraform state.
 func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -144,6 +150,9 @@ func (r *userResource) ImportState(ctx context.Context, req resource.ImportState
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
