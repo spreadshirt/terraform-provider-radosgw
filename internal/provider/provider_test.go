@@ -5,14 +5,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 )
 
-// testAccProtoV6ProviderFactories is used to instantiate a provider during acceptance testing.
+// testProviderFactories is used to instantiate a provider during acceptance testing.
 // The factory function is called for each Terraform CLI command to create a provider
 // server that the CLI can connect to and interact with.
-var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+var testProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"radosgw": providerserver.NewProtocol6WithError(New("test")()),
 }
 
-var testAccProviderSetup = `provider "radosgw" {
+var testProviderSetup = `provider "radosgw" {
 	endpoint          = "http://127.0.0.1:9000"
 	access_key_id     = "RMkni81ukvCYTLCjk62d"
 	secret_access_key = "k8xeC8Kb62PMSXglkeuS6kLLjOHRp6y5LMntsUAR"
