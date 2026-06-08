@@ -3,13 +3,13 @@ package provider
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 // Ensure the implementation satisfies the expected interfaces.
@@ -26,7 +26,8 @@ func NewUserResource() resource.Resource {
 
 // userResource is the resource implementation.
 type userResource struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -36,17 +37,18 @@ func (r *userResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 
-	client, ok := req.ProviderData.(*admin.API)
+	providerData, ok := req.ProviderData.(*radosgwProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *admin.API, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *radosgwProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = providerData.client
+	r.clientMu = providerData.clientMu
 }
 
 // Metadata returns the resource type name.
@@ -75,6 +77,9 @@ type userResourceModel struct {
 
 // Create creates the resource and sets the initial Terraform state.
 func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -85,6 +90,7 @@ func (r *userResource) Create(ctx context.Context, req resource.CreateRequest, r
 	user := admin.User{
 		ID:          plan.UserID.ValueString(),
 		DisplayName: plan.DisplayName.ValueString(),
+		GenerateKey: new(false),
 	}
 
 	user, err := r.client.CreateUser(ctx, user)
@@ -143,6 +149,9 @@ func (r *userResource) ImportState(ctx context.Context, req resource.ImportState
 
 // Update updates the resource and sets the updated Terraform state on success.
 func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan userResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -188,5 +197,22 @@ func (r *userResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 // Delete deletes the resource and removes the Terraform state on success.
 func (r *userResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
-	tflog.Info(ctx, "user update called???")
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
+	var state userResourceModel
+	diags := req.State.Get(ctx, &state)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.client.RemoveUser(ctx, admin.User{ID: state.UserID.ValueString()})
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error removing user",
+			fmt.Sprintf("Could not remove user %q: %s", state.UserID.ValueString(), err),
+		)
+		return
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -27,7 +28,8 @@ func NewSubuserResource() resource.Resource {
 
 // subuserResource is the resource implementation.
 type subuserResource struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -37,17 +39,18 @@ func (r *subuserResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*admin.API)
+	providerData, ok := req.ProviderData.(*radosgwProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *admin.API, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *radosgwProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = providerData.client
+	r.clientMu = providerData.clientMu
 }
 
 // Metadata returns the resource type name.
@@ -214,6 +217,9 @@ func (r *subuserResource) ImportState(ctx context.Context, req resource.ImportSt
 
 // Create implements resource.Resource.
 func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan subuserResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -246,6 +252,9 @@ func (r *subuserResource) Create(ctx context.Context, req resource.CreateRequest
 
 // Update implements resource.Resource.
 func (r *subuserResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan subuserResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -276,6 +285,9 @@ func (r *subuserResource) Update(ctx context.Context, req resource.UpdateRequest
 
 // Delete implements resource.Resource.
 func (r *subuserResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var state subuserResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)

@@ -1,6 +1,6 @@
 # Terraform Radosgw Provider
 
-**Note**: This is entirely experimental, pre-alpha and might break at any point.  It is able to do some things, but expect things not working and the data format to still change.
+**Note**: This project is _in beta_.  We've been using it for years, but it could still have a bunch of issues lurking in the code/edge-cases.
 
 An _attempt_ at a Terraform Provider for [radosgw (admin)](https://docs.ceph.com/en/latest/radosgw/adminops/).
 

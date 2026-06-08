@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/ceph/go-ceph/rgw/admin"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -25,7 +26,8 @@ func NewKeyResource() resource.Resource {
 
 // keyResource is the resource implementation.
 type keyResource struct {
-	client *admin.API
+	client   *admin.API
+	clientMu *sync.Mutex
 }
 
 // Configure implements resource.ResourceWithConfigure.
@@ -35,17 +37,18 @@ func (r *keyResource) Configure(ctx context.Context, req resource.ConfigureReque
 		return
 	}
 
-	client, ok := req.ProviderData.(*admin.API)
+	providerData, ok := req.ProviderData.(*radosgwProviderData)
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *admin.API, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *radosgwProviderData, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
 	}
 
-	r.client = client
+	r.client = providerData.client
+	r.clientMu = providerData.clientMu
 }
 
 // Metadata returns the resource type name.
@@ -86,6 +89,9 @@ type keyResourceModel struct {
 
 // Create creates the resource and sets the initial Terraform state.
 func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var plan keyResourceModel
 	diags := req.Plan.Get(ctx, &plan)
 	resp.Diagnostics.Append(diags...)
@@ -93,6 +99,7 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// get currently known keys
 	user, err := r.client.GetUser(ctx, admin.User{ID: plan.User.ValueString()})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -116,8 +123,7 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		KeyType: "s3",
 	}
 	if newKey.AccessKey == "" || newKey.SecretKey == "" {
-		generateKey := true
-		newKey.GenerateKey = &generateKey
+		newKey.GenerateKey = new(true)
 	}
 
 	keys, err := r.client.CreateKey(ctx, newKey)
@@ -129,8 +135,21 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 		return
 	}
 
+	// pick newly created key
+	expectedUser := plan.User.ValueString()
+	if !plan.Subuser.IsNull() {
+		expectedUser = plan.User.ValueString() + ":" + plan.Subuser.ValueString()
+	}
+
+	found := false
+	nonMatchingKeys := []string{}
 	for _, key := range *keys {
 		if seen[key.AccessKey] {
+			continue
+		}
+
+		if key.User != expectedUser {
+			nonMatchingKeys = append(nonMatchingKeys, fmt.Sprintf("%q (user = %q)", key.AccessKey, key.User))
 			continue
 		}
 
@@ -142,10 +161,25 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 			plan.User = types.StringValue(key.User)
 		}
 
+		found = true
+		seen[key.AccessKey] = true
+
 		plan.AccessKey = types.StringValue(key.AccessKey)
 		plan.SecretKey = types.StringValue(key.SecretKey)
 
 		break
+	}
+
+	if !found {
+		if len(nonMatchingKeys) == 0 {
+			resp.Diagnostics.AddError("Error finding created key", "All keys known before create, radosgw api may have silently failed")
+		} else {
+			resp.Diagnostics.AddError(
+				"Error finding created key",
+				"A key was created, but no matching key was found, non-matching candidates:\n\n - "+strings.Join(nonMatchingKeys, "\n - "),
+			)
+		}
+		return
 	}
 
 	diags = resp.State.Set(ctx, plan)
@@ -283,6 +317,9 @@ func (r *keyResource) Update(ctx context.Context, req resource.UpdateRequest, re
 
 // Delete deletes the resource and removes the Terraform state on success.
 func (r *keyResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+
 	var state keyResourceModel
 	diags := req.State.Get(ctx, &state)
 	resp.Diagnostics.Append(diags...)
