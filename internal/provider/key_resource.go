@@ -115,10 +115,16 @@ func (r *keyResource) Create(ctx context.Context, req resource.CreateRequest, re
 	r.seenKeysMu.Unlock()
 
 	newKey := admin.UserKeySpec{
-		UID:         plan.User.ValueString(),
-		SubUser:     plan.Subuser.ValueString(),
-		KeyType:     "s3",
-		GenerateKey: new(true),
+		User:      plan.User.ValueString(),
+		SubUser:   plan.Subuser.ValueString(),
+		AccessKey: plan.AccessKey.ValueString(),
+		SecretKey: plan.SecretKey.ValueString(),
+
+		UID:     plan.User.ValueString(),
+		KeyType: "s3",
+	}
+	if newKey.AccessKey == "" || newKey.SecretKey == "" {
+		newKey.GenerateKey = new(true)
 	}
 
 	keys, err := r.client.CreateKey(ctx, newKey)
